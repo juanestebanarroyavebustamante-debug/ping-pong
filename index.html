@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ping Pong</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    body {
+      background: #111;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      min-height: 100vh;
+      font-family: 'Courier New', monospace;
+      color: #fff;
+      gap: 16px;
+    }
+
+    h1 {
+      font-size: 28px;
+      font-weight: bold;
+      letter-spacing: 6px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+
+    .scoreboard {
+      display: flex;
+      gap: 40px;
+      font-size: 48px;
+      font-weight: bold;
+      letter-spacing: 4px;
+    }
+
+    .scoreboard span { min-width: 60px; text-align: center; }
+    .scoreboard .sep { color: #444; }
+
+    canvas {
+      border: 2px solid #333;
+      border-radius: 8px;
+      display: block;
+    }
+
+    .controls {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+    }
+
+    button {
+      padding: 8px 24px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 2px;
+      text-transform: uppercase;
+      background: transparent;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 6px;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+    }
+
+    button:hover { background: #222; border-color: #aaa; }
+
+    select {
+      padding: 7px 12px;
+      font-size: 14px;
+      font-family: 'Courier New', monospace;
+      letter-spacing: 1px;
+      background: #1a1a1a;
+      color: #fff;
+      border: 1px solid #555;
+      border-radius: 6px;
+      cursor: pointer;
+    }
+
+    #msg {
+      font-size: 13px;
+      color: #888;
+      letter-spacing: 1px;
+      height: 18px;
+    }
+
+    .legend {
+      font-size: 12px;
+      color: #555;
+      letter-spacing: 1px;
+      display: flex;
+      gap: 20px;
+    }
+
+    .legend span { color: #888; }
+  </style>
+</head>
+<body>
+
+<h1>Ping Pong</h1>
+
+<div class="scoreboard">
+  <span id="score1">0</span>
+  <span class="sep">:</span>
+  <span id="score2">0</span>
+</div>
+
+<canvas id="pong" width="600" height="380"></canvas>
+
+<div class="controls">
+  <button id="startBtn" onclick="toggleGame()">Iniciar</button>
+  <button onclick="resetGame()">Reiniciar</button>
+  <select id="diff">
+    <option value="easy">Fácil</option>
+    <option value="medium" selected>Medio</option>
+    <option value="hard">Difícil</option>
+  </select>
+</div>
+
+<p id="msg">Presiona Iniciar para jugar &nbsp;·&nbsp; W / S para mover</p>
+
+<div class="legend">
+  <span>Tú (izquierda): W ↑ &nbsp; S ↓</span>
+  <span>·</span>
+  <span>Primero en llegar a 5 puntos gana</span>
+</div>
+
+<script>
+  const canvas = document.getElementById('pong');
+  const ctx = canvas.getContext('2d');
+  const W = canvas.width, H = canvas.height;
+  const PAD_W = 10, PAD_H = 70, BALL_R = 8, PAD_SPEED = 5;
+  const WIN_SCORE = 5;
+
+  const DIFFICULTY = {
+    easy:   { speed: 3, error: 40, reaction: 0.04 },
+    medium: { speed: 4, error: 18, reaction: 0.07 },
+    hard:   { speed: 5, error: 5,  reaction: 0.12 }
+  };
+
+  let p1  = { y: H/2 - PAD_H/2, score: 0 };
+  let cpu = { y: H/2 - PAD_H/2, score: 0, target: H/2 };
+  let ball = { x: W/2, y: H/2, vx: 4, vy: 3 };
+  let keys = {};
+  let running = false;
+  let animId  = null;
+  let winner  = null;
+  let cpuError = 0;
+
+  function getDiff() {
+    return DIFFICULTY[document.getElementById('diff').value];
+  }
+
+  function resetBall(dir) {
+    ball.x = W/2; ball.y = H/2;
+    const angle = (Math.random() * 40 - 20) * Math.PI / 180;
+    const spd = getDiff().speed;
+    ball.vx = (dir || (Math.random() > 0.5 ? 1 : -1)) * spd * Math.cos(angle);
+    ball.vy = spd * Math.sin(angle) + (Math.random() > 0.5 ? 1 : -1) * 1.5;
+    cpuError = (Math.random() * 2 - 1) * getDiff().error;
+  }
+
+  function resetGame() {
+    running = false;
+    cancelAnimationFrame(animId);
+    p1  = { y: H/2 - PAD_H/2, score: 0 };
+    cpu = { y: H/2 - PAD_H/2, score: 0, target: H/2 };
+    winner = null;
+    resetBall(1);
+    document.getElementById('score1').textContent = 0;
+    document.getElementById('score2').textContent = 0;
+    document.getElementById('startBtn').textContent = 'Iniciar';
+    document.getElementById('msg').textContent = 'Presiona Iniciar para jugar · W / S para mover';
+    draw();
+  }
+
+  function toggleGame() {
+    if (winner) { resetGame(); return; }
+    running = !running;
+    document.getElementById('startBtn').textContent = running ? 'Pausar' : 'Continuar';
+    document.getElementById('msg').textContent = running ? '' : 'Pausado';
+    if (running) loop();
+    else cancelAnimationFrame(animId);
+  }
+
+  function updateCPU() {
+    const diff = getDiff();
+    cpu.target = ball.vx > 0 ? ball.y + cpuError : H / 2 + cpuError * 0.3;
+    const center = cpu.y + PAD_H / 2;
+    const delta  = cpu.target - center;
+    const move   = Math.min(Math.abs(delta), diff.speed + 1) * diff.reaction * 18;
+    if (Math.abs(delta) > 4) cpu.y += delta > 0 ? move : -move;
+    cpu.y = Math.max(0, Math.min(H - PAD_H, cpu.y));
+  }
+
+  function update() {
+    if (keys['w'] || keys['W']) p1.y = Math.max(0, p1.y - PAD_SPEED);
+    if (keys['s'] || keys['S']) p1.y = Math.min(H - PAD_H, p1.y + PAD_SPEED);
+
+    updateCPU();
+
+    ball.x += ball.vx;
+    ball.y += ball.vy;
+
+    if (ball.y - BALL_R <= 0) { ball.y = BALL_R; ball.vy =  Math.abs(ball.vy); }
+    if (ball.y + BALL_R >= H) { ball.y = H - BALL_R; ball.vy = -Math.abs(ball.vy); }
+
+    const hit1 = ball.x - BALL_R <= 22 + PAD_W && ball.x - BALL_R > 18 && ball.y >= p1.y  && ball.y <= p1.y  + PAD_H;
+    const hit2 = ball.x + BALL_R >= W - 22 - PAD_W && ball.x + BALL_R < W - 18 && ball.y >= cpu.y && ball.y <= cpu.y + PAD_H;
+
+    if (hit1) {
+      ball.x  = 22 + PAD_W + BALL_R + 1;
+      ball.vx = Math.abs(ball.vx) * 1.04;
+      ball.vy = ((ball.y - (p1.y + PAD_H/2)) / (PAD_H/2)) * 7;
+      cpuError = (Math.random() * 2 - 1) * getDiff().error;
+    }
+    if (hit2) {
+      ball.x  = W - 22 - PAD_W - BALL_R - 1;
+      ball.vx = -Math.abs(ball.vx) * 1.04;
+      ball.vy = ((ball.y - (cpu.y + PAD_H/2)) / (PAD_H/2)) * 7;
+      cpuError = (Math.random() * 2 - 1) * getDiff().error;
+    }
+
+    ball.vx = Math.max(-11, Math.min(11, ball.vx));
+    ball.vy = Math.max(-9,  Math.min(9,  ball.vy));
+
+    if (ball.x - BALL_R < 0) {
+      cpu.score++;
+      document.getElementById('score2').textContent = cpu.score;
+      if (cpu.score >= WIN_SCORE) { endGame('CPU'); return; }
+      resetBall(1);
+    }
+    if (ball.x + BALL_R > W) {
+      p1.score++;
+      document.getElementById('score1').textContent = p1.score;
+      if (p1.score >= WIN_SCORE) { endGame('Tú'); return; }
+      resetBall(-1);
+    }
+  }
+
+  function endGame(w) {
+    winner  = w;
+    running = false;
+    cancelAnimationFrame(animId);
+    const isPlayer = w !== 'CPU';
+    document.getElementById('msg').textContent = isPlayer
+      ? '¡Ganaste! Presiona Iniciar para otra partida.'
+      : 'La CPU ganó. Presiona Iniciar para otra partida.';
+    document.getElementById('startBtn').textContent = 'Nueva partida';
+    draw();
+  }
+
+  function draw() {
+    ctx.fillStyle = '#0d0d0d';
+    ctx.fillRect(0, 0, W, H);
+
+    // Center line
+    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
+    ctx.setLineDash([10, 10]);
+    ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
+    ctx.setLineDash([]);
+
+    // Player paddle (blue)
+    ctx.fillStyle = '#6699ff';
+    ctx.beginPath();
+    ctx.roundRect(22, p1.y, PAD_W, PAD_H, 4);
+    ctx.fill();
+
+    // CPU paddle (coral)
+    ctx.fillStyle = '#ff7755';
+    ctx.beginPath();
+    ctx.roundRect(W - 22 - PAD_W, cpu.y, PAD_W, PAD_H, 4);
+    ctx.fill();
+
+    // Ball
+    ctx.fillStyle = '#f0f0f0';
+    ctx.beginPath();
+    ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Winner overlay
+    if (winner) {
+      ctx.fillStyle = 'rgba(0,0,0,0.65)';
+      ctx.fillRect(0, 0, W, H);
+      const isPlayer = winner !== 'CPU';
+      ctx.fillStyle = isPlayer ? '#88ccff' : '#ff9977';
+      ctx.font = 'bold 32px Courier New';
+      ctx.textAlign = 'center';
+      ctx.fillText(isPlayer ? '¡Ganaste!' : 'CPU gana', W/2, H/2 - 12);
+      ctx.font = '15px Courier New';
+      ctx.fillStyle = 'rgba(255,255,255,0.5)';
+      ctx.fillText('Primera en llegar a ' + WIN_SCORE + ' puntos', W/2, H/2 + 20);
+    }
+  }
+
+  function loop() {
+    if (!running) return;
+    update();
+    draw();
+    animId = requestAnimationFrame(loop);
+  }
+
+  document.addEventListener('keydown', e => {
+    keys[e.key] = true;
+    if (['ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
+  });
+  document.addEventListener('keyup', e => { keys[e.key] = false; });
+
+  draw();
+</script>
+</body>
+</html>

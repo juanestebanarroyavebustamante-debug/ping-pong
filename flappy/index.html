@@ -1,1 +1,188 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Flappy Bird</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:#1a1400; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; min-height:100vh;
+      font-family:'Courier New',monospace; color:#fff; gap:14px;
+    }
+    .top { display:flex; align-items:center; justify-content:space-between; width:360px; }
+    .back { font-size:12px; color:#555; text-decoration:none; letter-spacing:1px; }
+    .back:hover { color:#aaa; }
+    h1 { font-size:22px; letter-spacing:6px; text-transform:uppercase; color:#ffcc33; }
+    .info { display:flex; gap:40px; font-size:14px; color:#aaa; letter-spacing:2px; }
+    .info span b { color:#ffcc33; font-size:24px; }
+    canvas { border:2px solid #3a3000; border-radius:8px; display:block; cursor:pointer; }
+    #msg { font-size:13px; color:#665500; letter-spacing:1px; height:18px; text-align:center; }
+    .legend { font-size:12px; color:#443300; letter-spacing:1px; }
+  </style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="../index.html">← ARCADE</a>
+  <h1>Flappy</h1>
+  <span></span>
+</div>
+<div class="info">
+  <span>PUNTOS<br><b id="scoreDisplay">0</b></span>
+  <span>MEJOR<br><b id="bestDisplay">0</b></span>
+</div>
+<canvas id="flappy" width="360" height="480"></canvas>
+<p id="msg">Haz clic o presiona Espacio para empezar</p>
+<div class="legend">Clic / Espacio / Toca la pantalla para volar</div>
+
+<script>
+const canvas=document.getElementById('flappy'),ctx=canvas.getContext('2d');
+const W=360,H=480;
+
+let bird,pipes,score,best=0,state,animId;
+// state: 'idle' | 'playing' | 'dead'
+
+const BIRD_X=80,BIRD_R=14,GRAVITY=0.45,JUMP=-8,PIPE_W=52,PIPE_GAP=140,PIPE_SPEED=2.5;
+
+function init(){
+  bird={y:H/2,vy:0,angle:0};
+  pipes=[];score=0;state='idle';
+  document.getElementById('scoreDisplay').textContent=0;
+  cancelAnimationFrame(animId);
+  draw();
+}
+
+function addPipe(){
+  const minY=80,maxY=H-80-PIPE_GAP;
+  const topH=Math.floor(Math.random()*(maxY-minY)+minY);
+  pipes.push({x:W,topH});
+}
+
+function jump(){
+  if(state==='idle'){state='playing';addPipe();loop();return;}
+  if(state==='dead'){init();return;}
+  bird.vy=JUMP;
+}
+
+function update(){
+  bird.vy+=GRAVITY; bird.y+=bird.vy;
+  bird.angle=Math.min(Math.max(bird.vy*3,-30),90);
+  // floor/ceiling
+  if(bird.y-BIRD_R<0){bird.y=BIRD_R;bird.vy=0;}
+  if(bird.y+BIRD_R>H-40){die();return;}
+
+  pipes.forEach(p=>{p.x-=PIPE_SPEED;});
+  if(pipes.length===0||pipes[pipes.length-1].x<W-210)addPipe();
+  pipes=pipes.filter(p=>p.x>-PIPE_W);
+
+  // score
+  pipes.forEach(p=>{
+    if(!p.passed&&p.x+PIPE_W<BIRD_X){p.passed=true;score++;if(score>best)best=score;document.getElementById('scoreDisplay').textContent=score;document.getElementById('bestDisplay').textContent=best;}
+  });
+
+  // collision
+  for(const p of pipes){
+    if(BIRD_X+BIRD_R-4>p.x&&BIRD_X-BIRD_R+4<p.x+PIPE_W){
+      if(bird.y-BIRD_R<p.topH||bird.y+BIRD_R>p.topH+PIPE_GAP){die();return;}
+    }
+  }
+}
+
+function die(){state='dead';cancelAnimationFrame(animId);document.getElementById('msg').textContent='¡Chocaste! Haz clic para intentar de nuevo.';draw();}
+
+function drawBird(){
+  ctx.save();
+  ctx.translate(BIRD_X,bird.y);
+  ctx.rotate(bird.angle*Math.PI/180);
+  // body
+  ctx.fillStyle='#ffcc33';
+  ctx.beginPath();ctx.ellipse(0,0,BIRD_R,BIRD_R-2,0,0,Math.PI*2);ctx.fill();
+  // eye
+  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(5,-4,4,0,Math.PI*2);ctx.fill();
+  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(6,-4,2,0,Math.PI*2);ctx.fill();
+  // beak
+  ctx.fillStyle='#ff8800';ctx.beginPath();ctx.moveTo(BIRD_R,0);ctx.lineTo(BIRD_R+8,2);ctx.lineTo(BIRD_R,4);ctx.fill();
+  // wing
+  ctx.fillStyle='#e6b800';ctx.beginPath();ctx.ellipse(-2,4,8,5,0.3,0,Math.PI*2);ctx.fill();
+  ctx.restore();
+}
+
+function drawPipe(p){
+  const radius=6;
+  // top pipe
+  ctx.fillStyle='#44aa33';
+  ctx.beginPath();ctx.roundRect(p.x,0,PIPE_W,p.topH-10,radius);ctx.fill();
+  ctx.fillStyle='#33881f';
+  ctx.beginPath();ctx.roundRect(p.x-4,p.topH-16,PIPE_W+8,16,4);ctx.fill();
+  // bottom pipe
+  const botY=p.topH+PIPE_GAP;
+  ctx.fillStyle='#44aa33';
+  ctx.beginPath();ctx.roundRect(p.x,botY+10,PIPE_W,H-botY-10-40,radius);ctx.fill();
+  ctx.fillStyle='#33881f';
+  ctx.beginPath();ctx.roundRect(p.x-4,botY,PIPE_W+8,16,4);ctx.fill();
+}
+
+function draw(){
+  // Sky gradient
+  const grd=ctx.createLinearGradient(0,0,0,H-40);
+  grd.addColorStop(0,'#1a3a6a');grd.addColorStop(1,'#2a5a8a');
+  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H-40);
+
+  // Clouds
+  ctx.fillStyle='rgba(255,255,255,0.08)';
+  [[60,80,60,20],[180,60,80,22],[290,100,50,18]].forEach(([x,y,w,h])=>{ctx.beginPath();ctx.ellipse(x,y,w,h,0,0,Math.PI*2);ctx.fill();});
+
+  pipes.forEach(drawPipe);
+  drawBird();
+
+  // Ground
+  ctx.fillStyle='#5a3a00';ctx.fillRect(0,H-40,W,40);
+  ctx.fillStyle='#7a5a10';ctx.fillRect(0,H-40,W,8);
+  // Ground stripes
+  ctx.fillStyle='rgba(255,200,0,0.1)';
+  for(let i=0;i<W;i+=30){ctx.fillRect(i,H-40,15,8);}
+
+  // Score while playing
+  if(state==='playing'){
+    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.roundRect(W/2-40,14,80,36,8);ctx.fill();
+    ctx.fillStyle='#ffcc33';ctx.font='bold 24px Courier New';ctx.textAlign='center';ctx.fillText(score,W/2,40);
+  }
+
+  // Idle screen
+  if(state==='idle'){
+    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H-40);
+    ctx.fillStyle='#ffcc33';ctx.font='bold 26px Courier New';ctx.textAlign='center';
+    ctx.fillText('FLAPPY BIRD',W/2,H/2-40);
+    ctx.fillStyle='rgba(255,204,51,0.7)';ctx.font='13px Courier New';
+    ctx.fillText('Haz clic o presiona Espacio',W/2,H/2);
+    ctx.fillText('para volar',W/2,H/2+22);
+  }
+
+  // Death screen
+  if(state==='dead'){
+    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H-40);
+    ctx.fillStyle='#ff4455';ctx.font='bold 26px Courier New';ctx.textAlign='center';
+    ctx.fillText('¡GAME OVER!',W/2,H/2-30);
+    ctx.fillStyle='#ffcc33';ctx.font='16px Courier New';
+    ctx.fillText('Puntos: '+score,W/2,H/2+4);
+    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='13px Courier New';
+    ctx.fillText('Haz clic para reintentar',W/2,H/2+30);
+  }
+}
+
+function loop(){
+  if(state!=='playing')return;
+  update();draw();
+  animId=requestAnimationFrame(loop);
+}
+
+document.addEventListener('keydown',e=>{if(e.code==='Space'){jump();e.preventDefault();}});
+canvas.addEventListener('click',jump);
+canvas.addEventListener('touchstart',e=>{jump();e.preventDefault();},{passive:false});
+
+init();
+</script>
+</body>
+</html>
 

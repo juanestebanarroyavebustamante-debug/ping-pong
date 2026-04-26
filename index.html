@@ -1,314 +1,219 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-  <meta charset="UTF-8" />
+  <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Ping Pong</title>
+  <title>Mi Arcade</title>
   <style>
-    * { margin: 0; padding: 0; box-sizing: border-box; }
+    @import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&family=Rajdhani:wght@400;600&display=swap');
+
+    * { margin:0; padding:0; box-sizing:border-box; }
 
     body {
-      background: #111;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
+      background: #0a0a0f;
       min-height: 100vh;
-      font-family: 'Courier New', monospace;
+      font-family: 'Rajdhani', sans-serif;
       color: #fff;
-      gap: 16px;
+      overflow-x: hidden;
     }
 
-    h1 {
-      font-size: 28px;
-      font-weight: bold;
-      letter-spacing: 6px;
-      text-transform: uppercase;
-      color: #fff;
+    .bg-grid {
+      position: fixed; inset: 0; z-index: 0;
+      background-image:
+        linear-gradient(rgba(100,100,255,0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(100,100,255,0.04) 1px, transparent 1px);
+      background-size: 40px 40px;
+      pointer-events: none;
     }
 
-    .scoreboard {
-      display: flex;
-      gap: 40px;
-      font-size: 48px;
-      font-weight: bold;
+    header {
+      position: relative; z-index: 1;
+      text-align: center;
+      padding: 60px 20px 30px;
+    }
+
+    header h1 {
+      font-family: 'Press Start 2P', monospace;
+      font-size: clamp(20px, 4vw, 36px);
+      color: #fff;
+      text-shadow: 0 0 20px rgba(120,120,255,0.6), 0 0 60px rgba(120,120,255,0.2);
       letter-spacing: 4px;
+      margin-bottom: 12px;
     }
 
-    .scoreboard span { min-width: 60px; text-align: center; }
-    .scoreboard .sep { color: #444; }
+    header p {
+      font-size: 18px;
+      color: #888;
+      letter-spacing: 2px;
+    }
 
-    canvas {
-      border: 2px solid #333;
-      border-radius: 8px;
+    .divider {
+      width: 120px; height: 2px;
+      background: linear-gradient(90deg, transparent, #6666ff, transparent);
+      margin: 24px auto;
+    }
+
+    .grid {
+      position: relative; z-index: 1;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 24px;
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 20px 32px 80px;
+    }
+
+    .card {
+      background: #13131f;
+      border: 1px solid #2a2a4a;
+      border-radius: 16px;
+      overflow: hidden;
+      text-decoration: none;
+      color: inherit;
+      transition: transform 0.2s, border-color 0.2s, box-shadow 0.2s;
       display: block;
     }
 
-    .controls {
+    .card:hover {
+      transform: translateY(-6px);
+      border-color: var(--accent);
+      box-shadow: 0 12px 40px rgba(0,0,0,0.5), 0 0 20px var(--glow);
+    }
+
+    .card-thumb {
+      height: 160px;
       display: flex;
-      gap: 12px;
       align-items: center;
+      justify-content: center;
+      font-size: 72px;
+      background: var(--bg);
+      position: relative;
+      overflow: hidden;
     }
 
-    button {
-      padding: 8px 24px;
-      font-size: 14px;
-      font-family: 'Courier New', monospace;
-      letter-spacing: 2px;
-      text-transform: uppercase;
-      background: transparent;
-      color: #fff;
-      border: 1px solid #555;
-      border-radius: 6px;
-      cursor: pointer;
-      transition: background 0.2s, border-color 0.2s;
+    .card-thumb::after {
+      content: '';
+      position: absolute; inset: 0;
+      background: linear-gradient(to bottom, transparent 60%, #13131f);
     }
 
-    button:hover { background: #222; border-color: #aaa; }
+    .card-body { padding: 20px; }
 
-    select {
-      padding: 7px 12px;
-      font-size: 14px;
-      font-family: 'Courier New', monospace;
-      letter-spacing: 1px;
-      background: #1a1a1a;
-      color: #fff;
-      border: 1px solid #555;
-      border-radius: 6px;
-      cursor: pointer;
-    }
-
-    #msg {
+    .card-body h2 {
+      font-family: 'Press Start 2P', monospace;
       font-size: 13px;
-      color: #888;
-      letter-spacing: 1px;
-      height: 18px;
+      margin-bottom: 10px;
+      color: var(--accent);
     }
 
-    .legend {
-      font-size: 12px;
-      color: #555;
-      letter-spacing: 1px;
+    .card-body p {
+      font-size: 15px;
+      color: #999;
+      line-height: 1.5;
+    }
+
+    .card-footer {
+      padding: 0 20px 20px;
       display: flex;
-      gap: 20px;
+      align-items: center;
+      justify-content: space-between;
     }
 
-    .legend span { color: #888; }
+    .badge {
+      font-size: 11px;
+      font-family: 'Press Start 2P', monospace;
+      padding: 4px 10px;
+      border-radius: 20px;
+      background: var(--accent-dim);
+      color: var(--accent);
+    }
+
+    .play-btn {
+      font-size: 13px;
+      font-family: 'Press Start 2P', monospace;
+      padding: 8px 18px;
+      background: var(--accent);
+      color: #000;
+      border-radius: 8px;
+      font-weight: bold;
+      letter-spacing: 1px;
+    }
+
+    footer {
+      position: relative; z-index: 1;
+      text-align: center;
+      padding: 20px;
+      font-size: 13px;
+      color: #333;
+      letter-spacing: 2px;
+    }
   </style>
 </head>
 <body>
+<div class="bg-grid"></div>
 
-<h1>Ping Pong</h1>
+<header>
+  <h1>MI ARCADE</h1>
+  <p>Elige tu juego y a jugar</p>
+  <div class="divider"></div>
+</header>
 
-<div class="scoreboard">
-  <span id="score1">0</span>
-  <span class="sep">:</span>
-  <span id="score2">0</span>
+<div class="grid">
+
+  <a class="card" href="pingpong/index.html"
+     style="--accent:#6699ff;--accent-dim:rgba(102,153,255,0.12);--glow:rgba(102,153,255,0.2);--bg:linear-gradient(135deg,#0d1a3a,#1a2a5a);">
+    <div class="card-thumb">🏓</div>
+    <div class="card-body">
+      <h2>Ping Pong</h2>
+      <p>Juega contra la CPU. Usa W y S para mover tu paleta.</p>
+    </div>
+    <div class="card-footer">
+      <span class="badge">1 jugador</span>
+      <span class="play-btn">▶ JUGAR</span>
+    </div>
+  </a>
+
+  <a class="card" href="snake/index.html"
+     style="--accent:#44dd88;--accent-dim:rgba(68,221,136,0.12);--glow:rgba(68,221,136,0.2);--bg:linear-gradient(135deg,#0a2a18,#0f3d22);">
+    <div class="card-thumb">🐍</div>
+    <div class="card-body">
+      <h2>Snake</h2>
+      <p>Come manzanas y crece sin chocarte con las paredes ni contigo mismo.</p>
+    </div>
+    <div class="card-footer">
+      <span class="badge">1 jugador</span>
+      <span class="play-btn">▶ JUGAR</span>
+    </div>
+  </a>
+
+  <a class="card" href="tetris/index.html"
+     style="--accent:#ff44aa;--accent-dim:rgba(255,68,170,0.12);--glow:rgba(255,68,170,0.2);--bg:linear-gradient(135deg,#2a0a1f,#3d0f2e);">
+    <div class="card-thumb">🧱</div>
+    <div class="card-body">
+      <h2>Tetris</h2>
+      <p>Encaja las piezas y completa líneas antes de que la pantalla se llene.</p>
+    </div>
+    <div class="card-footer">
+      <span class="badge">1 jugador</span>
+      <span class="play-btn">▶ JUGAR</span>
+    </div>
+  </a>
+
+  <a class="card" href="flappy/index.html"
+     style="--accent:#ffcc33;--accent-dim:rgba(255,204,51,0.12);--glow:rgba(255,204,51,0.2);--bg:linear-gradient(135deg,#1a1500,#2a2200);">
+    <div class="card-thumb">🐦</div>
+    <div class="card-body">
+      <h2>Flappy Bird</h2>
+      <p>Presiona espacio o toca la pantalla para volar y esquivar los tubos.</p>
+    </div>
+    <div class="card-footer">
+      <span class="badge">1 jugador</span>
+      <span class="play-btn">▶ JUGAR</span>
+    </div>
+  </a>
+
 </div>
 
-<canvas id="pong" width="600" height="380"></canvas>
-
-<div class="controls">
-  <button id="startBtn" onclick="toggleGame()">Iniciar</button>
-  <button onclick="resetGame()">Reiniciar</button>
-  <select id="diff">
-    <option value="easy">Fácil</option>
-    <option value="medium" selected>Medio</option>
-    <option value="hard">Difícil</option>
-  </select>
-</div>
-
-<p id="msg">Presiona Iniciar para jugar &nbsp;·&nbsp; W / S para mover</p>
-
-<div class="legend">
-  <span>Tú (izquierda): W ↑ &nbsp; S ↓</span>
-  <span>·</span>
-  <span>Primero en llegar a 5 puntos gana</span>
-</div>
-
-<script>
-  const canvas = document.getElementById('pong');
-  const ctx = canvas.getContext('2d');
-  const W = canvas.width, H = canvas.height;
-  const PAD_W = 10, PAD_H = 70, BALL_R = 8, PAD_SPEED = 5;
-  const WIN_SCORE = 5;
-
-  const DIFFICULTY = {
-    easy:   { speed: 3, error: 40, reaction: 0.04 },
-    medium: { speed: 4, error: 18, reaction: 0.07 },
-    hard:   { speed: 5, error: 5,  reaction: 0.12 }
-  };
-
-  let p1  = { y: H/2 - PAD_H/2, score: 0 };
-  let cpu = { y: H/2 - PAD_H/2, score: 0, target: H/2 };
-  let ball = { x: W/2, y: H/2, vx: 4, vy: 3 };
-  let keys = {};
-  let running = false;
-  let animId  = null;
-  let winner  = null;
-  let cpuError = 0;
-
-  function getDiff() {
-    return DIFFICULTY[document.getElementById('diff').value];
-  }
-
-  function resetBall(dir) {
-    ball.x = W/2; ball.y = H/2;
-    const angle = (Math.random() * 40 - 20) * Math.PI / 180;
-    const spd = getDiff().speed;
-    ball.vx = (dir || (Math.random() > 0.5 ? 1 : -1)) * spd * Math.cos(angle);
-    ball.vy = spd * Math.sin(angle) + (Math.random() > 0.5 ? 1 : -1) * 1.5;
-    cpuError = (Math.random() * 2 - 1) * getDiff().error;
-  }
-
-  function resetGame() {
-    running = false;
-    cancelAnimationFrame(animId);
-    p1  = { y: H/2 - PAD_H/2, score: 0 };
-    cpu = { y: H/2 - PAD_H/2, score: 0, target: H/2 };
-    winner = null;
-    resetBall(1);
-    document.getElementById('score1').textContent = 0;
-    document.getElementById('score2').textContent = 0;
-    document.getElementById('startBtn').textContent = 'Iniciar';
-    document.getElementById('msg').textContent = 'Presiona Iniciar para jugar · W / S para mover';
-    draw();
-  }
-
-  function toggleGame() {
-    if (winner) { resetGame(); return; }
-    running = !running;
-    document.getElementById('startBtn').textContent = running ? 'Pausar' : 'Continuar';
-    document.getElementById('msg').textContent = running ? '' : 'Pausado';
-    if (running) loop();
-    else cancelAnimationFrame(animId);
-  }
-
-  function updateCPU() {
-    const diff = getDiff();
-    cpu.target = ball.vx > 0 ? ball.y + cpuError : H / 2 + cpuError * 0.3;
-    const center = cpu.y + PAD_H / 2;
-    const delta  = cpu.target - center;
-    const move   = Math.min(Math.abs(delta), diff.speed + 1) * diff.reaction * 18;
-    if (Math.abs(delta) > 4) cpu.y += delta > 0 ? move : -move;
-    cpu.y = Math.max(0, Math.min(H - PAD_H, cpu.y));
-  }
-
-  function update() {
-    if (keys['w'] || keys['W']) p1.y = Math.max(0, p1.y - PAD_SPEED);
-    if (keys['s'] || keys['S']) p1.y = Math.min(H - PAD_H, p1.y + PAD_SPEED);
-
-    updateCPU();
-
-    ball.x += ball.vx;
-    ball.y += ball.vy;
-
-    if (ball.y - BALL_R <= 0) { ball.y = BALL_R; ball.vy =  Math.abs(ball.vy); }
-    if (ball.y + BALL_R >= H) { ball.y = H - BALL_R; ball.vy = -Math.abs(ball.vy); }
-
-    const hit1 = ball.x - BALL_R <= 22 + PAD_W && ball.x - BALL_R > 18 && ball.y >= p1.y  && ball.y <= p1.y  + PAD_H;
-    const hit2 = ball.x + BALL_R >= W - 22 - PAD_W && ball.x + BALL_R < W - 18 && ball.y >= cpu.y && ball.y <= cpu.y + PAD_H;
-
-    if (hit1) {
-      ball.x  = 22 + PAD_W + BALL_R + 1;
-      ball.vx = Math.abs(ball.vx) * 1.04;
-      ball.vy = ((ball.y - (p1.y + PAD_H/2)) / (PAD_H/2)) * 7;
-      cpuError = (Math.random() * 2 - 1) * getDiff().error;
-    }
-    if (hit2) {
-      ball.x  = W - 22 - PAD_W - BALL_R - 1;
-      ball.vx = -Math.abs(ball.vx) * 1.04;
-      ball.vy = ((ball.y - (cpu.y + PAD_H/2)) / (PAD_H/2)) * 7;
-      cpuError = (Math.random() * 2 - 1) * getDiff().error;
-    }
-
-    ball.vx = Math.max(-11, Math.min(11, ball.vx));
-    ball.vy = Math.max(-9,  Math.min(9,  ball.vy));
-
-    if (ball.x - BALL_R < 0) {
-      cpu.score++;
-      document.getElementById('score2').textContent = cpu.score;
-      if (cpu.score >= WIN_SCORE) { endGame('CPU'); return; }
-      resetBall(1);
-    }
-    if (ball.x + BALL_R > W) {
-      p1.score++;
-      document.getElementById('score1').textContent = p1.score;
-      if (p1.score >= WIN_SCORE) { endGame('Tú'); return; }
-      resetBall(-1);
-    }
-  }
-
-  function endGame(w) {
-    winner  = w;
-    running = false;
-    cancelAnimationFrame(animId);
-    const isPlayer = w !== 'CPU';
-    document.getElementById('msg').textContent = isPlayer
-      ? '¡Ganaste! Presiona Iniciar para otra partida.'
-      : 'La CPU ganó. Presiona Iniciar para otra partida.';
-    document.getElementById('startBtn').textContent = 'Nueva partida';
-    draw();
-  }
-
-  function draw() {
-    ctx.fillStyle = '#0d0d0d';
-    ctx.fillRect(0, 0, W, H);
-
-    // Center line
-    ctx.strokeStyle = 'rgba(255,255,255,0.1)';
-    ctx.setLineDash([10, 10]);
-    ctx.lineWidth = 2;
-    ctx.beginPath(); ctx.moveTo(W/2, 0); ctx.lineTo(W/2, H); ctx.stroke();
-    ctx.setLineDash([]);
-
-    // Player paddle (blue)
-    ctx.fillStyle = '#6699ff';
-    ctx.beginPath();
-    ctx.roundRect(22, p1.y, PAD_W, PAD_H, 4);
-    ctx.fill();
-
-    // CPU paddle (coral)
-    ctx.fillStyle = '#ff7755';
-    ctx.beginPath();
-    ctx.roundRect(W - 22 - PAD_W, cpu.y, PAD_W, PAD_H, 4);
-    ctx.fill();
-
-    // Ball
-    ctx.fillStyle = '#f0f0f0';
-    ctx.beginPath();
-    ctx.arc(ball.x, ball.y, BALL_R, 0, Math.PI * 2);
-    ctx.fill();
-
-    // Winner overlay
-    if (winner) {
-      ctx.fillStyle = 'rgba(0,0,0,0.65)';
-      ctx.fillRect(0, 0, W, H);
-      const isPlayer = winner !== 'CPU';
-      ctx.fillStyle = isPlayer ? '#88ccff' : '#ff9977';
-      ctx.font = 'bold 32px Courier New';
-      ctx.textAlign = 'center';
-      ctx.fillText(isPlayer ? '¡Ganaste!' : 'CPU gana', W/2, H/2 - 12);
-      ctx.font = '15px Courier New';
-      ctx.fillStyle = 'rgba(255,255,255,0.5)';
-      ctx.fillText('Primera en llegar a ' + WIN_SCORE + ' puntos', W/2, H/2 + 20);
-    }
-  }
-
-  function loop() {
-    if (!running) return;
-    update();
-    draw();
-    animId = requestAnimationFrame(loop);
-  }
-
-  document.addEventListener('keydown', e => {
-    keys[e.key] = true;
-    if (['ArrowUp','ArrowDown',' '].includes(e.key)) e.preventDefault();
-  });
-  document.addEventListener('keyup', e => { keys[e.key] = false; });
-
-  draw();
-</script>
+<footer>HECHO CON ❤️ · MI ARCADE</footer>
 </body>
 </html>

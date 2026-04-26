@@ -3,186 +3,188 @@
 <head>
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Flappy Bird</title>
+  <title>Tetris</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
     body {
-      background:#1a1400; display:flex; flex-direction:column;
+      background:#1a0a2a; display:flex; flex-direction:column;
       align-items:center; justify-content:center; min-height:100vh;
       font-family:'Courier New',monospace; color:#fff; gap:14px;
     }
-    .top { display:flex; align-items:center; justify-content:space-between; width:360px; }
+    .top { display:flex; align-items:center; justify-content:space-between; width:460px; }
     .back { font-size:12px; color:#555; text-decoration:none; letter-spacing:1px; }
     .back:hover { color:#aaa; }
-    h1 { font-size:22px; letter-spacing:6px; text-transform:uppercase; color:#ffcc33; }
-    .info { display:flex; gap:40px; font-size:14px; color:#aaa; letter-spacing:2px; }
-    .info span b { color:#ffcc33; font-size:24px; }
-    canvas { border:2px solid #3a3000; border-radius:8px; display:block; cursor:pointer; }
-    #msg { font-size:13px; color:#665500; letter-spacing:1px; height:18px; text-align:center; }
-    .legend { font-size:12px; color:#443300; letter-spacing:1px; }
+    h1 { font-size:22px; letter-spacing:6px; text-transform:uppercase; color:#ff44aa; }
+    .game-wrap { display:flex; gap:20px; align-items:flex-start; }
+    canvas { border:2px solid #3a1a4a; border-radius:8px; display:block; }
+    .side { display:flex; flex-direction:column; gap:20px; width:120px; }
+    .panel { background:#120820; border:1px solid #3a1a4a; border-radius:8px; padding:12px; }
+    .panel label { font-size:10px; color:#884499; letter-spacing:2px; display:block; margin-bottom:6px; }
+    .panel b { font-size:28px; color:#ff44aa; }
+    .next-label { font-size:10px; color:#884499; letter-spacing:2px; margin-bottom:6px; }
+    #nextCanvas { border-radius:6px; }
+    .controls { display:flex; flex-direction:column; gap:8px; }
+    button {
+      padding:7px 12px; font-size:11px; font-family:'Courier New',monospace;
+      letter-spacing:1px; text-transform:uppercase; background:transparent;
+      color:#fff; border:1px solid #3a1a4a; border-radius:6px; cursor:pointer; transition:all 0.2s; width:100%;
+    }
+    button:hover { background:#1f0d30; border-color:#ff44aa; color:#ff44aa; }
+    #msg { font-size:12px; color:#664477; letter-spacing:1px; height:16px; text-align:center; }
+    .legend { font-size:11px; color:#443355; letter-spacing:1px; text-align:center; }
   </style>
 </head>
 <body>
 <div class="top">
   <a class="back" href="../index.html">← ARCADE</a>
-  <h1>Flappy</h1>
+  <h1>Tetris</h1>
   <span></span>
 </div>
-<div class="info">
-  <span>PUNTOS<br><b id="scoreDisplay">0</b></span>
-  <span>MEJOR<br><b id="bestDisplay">0</b></span>
+<div class="game-wrap">
+  <canvas id="board" width="200" height="400"></canvas>
+  <div class="side">
+    <div class="panel"><label>PUNTOS</label><b id="scoreDisplay">0</b></div>
+    <div class="panel"><label>NIVEL</label><b id="levelDisplay">1</b></div>
+    <div class="panel"><label>LÍNEAS</label><b id="linesDisplay">0</b></div>
+    <div class="panel">
+      <div class="next-label">SIGUIENTE</div>
+      <canvas id="nextCanvas" width="80" height="80"></canvas>
+    </div>
+    <div class="controls">
+      <button id="startBtn" onclick="toggleGame()">Iniciar</button>
+      <button onclick="resetGame()">Reiniciar</button>
+    </div>
+  </div>
 </div>
-<canvas id="flappy" width="360" height="480"></canvas>
-<p id="msg">Haz clic o presiona Espacio para empezar</p>
-<div class="legend">Clic / Espacio / Toca la pantalla para volar</div>
+<p id="msg">Presiona Iniciar para jugar</p>
+<div class="legend">← → mover &nbsp;·&nbsp; ↑ rotar &nbsp;·&nbsp; ↓ bajar &nbsp;·&nbsp; Espacio caída</div>
 
 <script>
-const canvas=document.getElementById('flappy'),ctx=canvas.getContext('2d');
-const W=360,H=480;
+const COLS=10,ROWS=20,CELL=20;
+const canvas=document.getElementById('board'),ctx=canvas.getContext('2d');
+const nCanvas=document.getElementById('nextCanvas'),nCtx=nCanvas.getContext('2d');
 
-let bird,pipes,score,best=0,state,animId;
-// state: 'idle' | 'playing' | 'dead'
+const PIECES=[
+  {shape:[[1,1,1,1]],color:'#00ccff'},
+  {shape:[[1,1],[1,1]],color:'#ffcc00'},
+  {shape:[[0,1,0],[1,1,1]],color:'#ff44aa'},
+  {shape:[[1,0,0],[1,1,1]],color:'#ff8800'},
+  {shape:[[0,0,1],[1,1,1]],color:'#4488ff'},
+  {shape:[[0,1,1],[1,1,0]],color:'#44dd88'},
+  {shape:[[1,1,0],[0,1,1]],color:'#ff4455'},
+];
 
-const BIRD_X=80,BIRD_R=14,GRAVITY=0.45,JUMP=-8,PIPE_W=52,PIPE_GAP=140,PIPE_SPEED=2.5;
+let board,current,next,score,level,lines,running,dead,animId,dropInterval,lastDrop;
+
+function newBoard(){return Array.from({length:ROWS},()=>Array(COLS).fill(0));}
+function randPiece(){const p=PIECES[Math.floor(Math.random()*PIECES.length)];return {shape:p.shape.map(r=>[...r]),color:p.color,x:Math.floor(COLS/2)-Math.floor(p.shape[0].length/2),y:0};}
 
 function init(){
-  bird={y:H/2,vy:0,angle:0};
-  pipes=[];score=0;state='idle';
-  document.getElementById('scoreDisplay').textContent=0;
-  cancelAnimationFrame(animId);
+  board=newBoard(); score=0; level=1; lines=0; dead=false;
+  current=randPiece(); next=randPiece();
+  update_ui(); drawNext(); draw();
+}
+
+function update_ui(){
+  document.getElementById('scoreDisplay').textContent=score;
+  document.getElementById('levelDisplay').textContent=level;
+  document.getElementById('linesDisplay').textContent=lines;
+}
+
+function resetGame(){
+  running=false; cancelAnimationFrame(animId);
+  document.getElementById('startBtn').textContent='Iniciar';
+  document.getElementById('msg').textContent='Presiona Iniciar para jugar';
+  init();
+}
+
+function toggleGame(){
+  if(dead){resetGame();return;}
+  running=!running;
+  document.getElementById('startBtn').textContent=running?'Pausar':'Continuar';
+  document.getElementById('msg').textContent=running?'':'Pausado';
+  if(running){lastDrop=performance.now();loop();}
+  else cancelAnimationFrame(animId);
+}
+
+function getSpeed(){return Math.max(100,600-level*60);}
+
+function loop(ts=0){
+  if(!running)return;
+  if(ts-lastDrop>getSpeed()){drop();lastDrop=ts;}
   draw();
-}
-
-function addPipe(){
-  const minY=80,maxY=H-80-PIPE_GAP;
-  const topH=Math.floor(Math.random()*(maxY-minY)+minY);
-  pipes.push({x:W,topH});
-}
-
-function jump(){
-  if(state==='idle'){state='playing';addPipe();loop();return;}
-  if(state==='dead'){init();return;}
-  bird.vy=JUMP;
-}
-
-function update(){
-  bird.vy+=GRAVITY; bird.y+=bird.vy;
-  bird.angle=Math.min(Math.max(bird.vy*3,-30),90);
-  // floor/ceiling
-  if(bird.y-BIRD_R<0){bird.y=BIRD_R;bird.vy=0;}
-  if(bird.y+BIRD_R>H-40){die();return;}
-
-  pipes.forEach(p=>{p.x-=PIPE_SPEED;});
-  if(pipes.length===0||pipes[pipes.length-1].x<W-210)addPipe();
-  pipes=pipes.filter(p=>p.x>-PIPE_W);
-
-  // score
-  pipes.forEach(p=>{
-    if(!p.passed&&p.x+PIPE_W<BIRD_X){p.passed=true;score++;if(score>best)best=score;document.getElementById('scoreDisplay').textContent=score;document.getElementById('bestDisplay').textContent=best;}
-  });
-
-  // collision
-  for(const p of pipes){
-    if(BIRD_X+BIRD_R-4>p.x&&BIRD_X-BIRD_R+4<p.x+PIPE_W){
-      if(bird.y-BIRD_R<p.topH||bird.y+BIRD_R>p.topH+PIPE_GAP){die();return;}
-    }
-  }
-}
-
-function die(){state='dead';cancelAnimationFrame(animId);document.getElementById('msg').textContent='¡Chocaste! Haz clic para intentar de nuevo.';draw();}
-
-function drawBird(){
-  ctx.save();
-  ctx.translate(BIRD_X,bird.y);
-  ctx.rotate(bird.angle*Math.PI/180);
-  // body
-  ctx.fillStyle='#ffcc33';
-  ctx.beginPath();ctx.ellipse(0,0,BIRD_R,BIRD_R-2,0,0,Math.PI*2);ctx.fill();
-  // eye
-  ctx.fillStyle='#fff';ctx.beginPath();ctx.arc(5,-4,4,0,Math.PI*2);ctx.fill();
-  ctx.fillStyle='#222';ctx.beginPath();ctx.arc(6,-4,2,0,Math.PI*2);ctx.fill();
-  // beak
-  ctx.fillStyle='#ff8800';ctx.beginPath();ctx.moveTo(BIRD_R,0);ctx.lineTo(BIRD_R+8,2);ctx.lineTo(BIRD_R,4);ctx.fill();
-  // wing
-  ctx.fillStyle='#e6b800';ctx.beginPath();ctx.ellipse(-2,4,8,5,0.3,0,Math.PI*2);ctx.fill();
-  ctx.restore();
-}
-
-function drawPipe(p){
-  const radius=6;
-  // top pipe
-  ctx.fillStyle='#44aa33';
-  ctx.beginPath();ctx.roundRect(p.x,0,PIPE_W,p.topH-10,radius);ctx.fill();
-  ctx.fillStyle='#33881f';
-  ctx.beginPath();ctx.roundRect(p.x-4,p.topH-16,PIPE_W+8,16,4);ctx.fill();
-  // bottom pipe
-  const botY=p.topH+PIPE_GAP;
-  ctx.fillStyle='#44aa33';
-  ctx.beginPath();ctx.roundRect(p.x,botY+10,PIPE_W,H-botY-10-40,radius);ctx.fill();
-  ctx.fillStyle='#33881f';
-  ctx.beginPath();ctx.roundRect(p.x-4,botY,PIPE_W+8,16,4);ctx.fill();
-}
-
-function draw(){
-  // Sky gradient
-  const grd=ctx.createLinearGradient(0,0,0,H-40);
-  grd.addColorStop(0,'#1a3a6a');grd.addColorStop(1,'#2a5a8a');
-  ctx.fillStyle=grd;ctx.fillRect(0,0,W,H-40);
-
-  // Clouds
-  ctx.fillStyle='rgba(255,255,255,0.08)';
-  [[60,80,60,20],[180,60,80,22],[290,100,50,18]].forEach(([x,y,w,h])=>{ctx.beginPath();ctx.ellipse(x,y,w,h,0,0,Math.PI*2);ctx.fill();});
-
-  pipes.forEach(drawPipe);
-  drawBird();
-
-  // Ground
-  ctx.fillStyle='#5a3a00';ctx.fillRect(0,H-40,W,40);
-  ctx.fillStyle='#7a5a10';ctx.fillRect(0,H-40,W,8);
-  // Ground stripes
-  ctx.fillStyle='rgba(255,200,0,0.1)';
-  for(let i=0;i<W;i+=30){ctx.fillRect(i,H-40,15,8);}
-
-  // Score while playing
-  if(state==='playing'){
-    ctx.fillStyle='rgba(0,0,0,0.4)';ctx.beginPath();ctx.roundRect(W/2-40,14,80,36,8);ctx.fill();
-    ctx.fillStyle='#ffcc33';ctx.font='bold 24px Courier New';ctx.textAlign='center';ctx.fillText(score,W/2,40);
-  }
-
-  // Idle screen
-  if(state==='idle'){
-    ctx.fillStyle='rgba(0,0,0,0.5)';ctx.fillRect(0,0,W,H-40);
-    ctx.fillStyle='#ffcc33';ctx.font='bold 26px Courier New';ctx.textAlign='center';
-    ctx.fillText('FLAPPY BIRD',W/2,H/2-40);
-    ctx.fillStyle='rgba(255,204,51,0.7)';ctx.font='13px Courier New';
-    ctx.fillText('Haz clic o presiona Espacio',W/2,H/2);
-    ctx.fillText('para volar',W/2,H/2+22);
-  }
-
-  // Death screen
-  if(state==='dead'){
-    ctx.fillStyle='rgba(0,0,0,0.6)';ctx.fillRect(0,0,W,H-40);
-    ctx.fillStyle='#ff4455';ctx.font='bold 26px Courier New';ctx.textAlign='center';
-    ctx.fillText('¡GAME OVER!',W/2,H/2-30);
-    ctx.fillStyle='#ffcc33';ctx.font='16px Courier New';
-    ctx.fillText('Puntos: '+score,W/2,H/2+4);
-    ctx.fillStyle='rgba(255,255,255,0.5)';ctx.font='13px Courier New';
-    ctx.fillText('Haz clic para reintentar',W/2,H/2+30);
-  }
-}
-
-function loop(){
-  if(state!=='playing')return;
-  update();draw();
   animId=requestAnimationFrame(loop);
 }
 
-document.addEventListener('keydown',e=>{if(e.code==='Space'){jump();e.preventDefault();}});
-canvas.addEventListener('click',jump);
-canvas.addEventListener('touchstart',e=>{jump();e.preventDefault();},{passive:false});
+function fits(shape,ox,oy){
+  for(let r=0;r<shape.length;r++)for(let c=0;c<shape[r].length;c++){
+    if(!shape[r][c])continue;
+    const nx=ox+c,ny=oy+r;
+    if(nx<0||nx>=COLS||ny>=ROWS)return false;
+    if(ny>=0&&board[ny][nx])return false;
+  }return true;
+}
+
+function place(){
+  current.shape.forEach((row,r)=>row.forEach((v,c)=>{if(v&&current.y+r>=0)board[current.y+r][current.x+c]=current.color;}));
+  clearLines(); current=next; next=randPiece(); drawNext();
+  if(!fits(current.shape,current.x,current.y)){endGame();}
+}
+
+function clearLines(){
+  let cleared=0;
+  for(let r=ROWS-1;r>=0;){
+    if(board[r].every(c=>c)){board.splice(r,1);board.unshift(Array(COLS).fill(0));cleared++;}
+    else r--;
+  }
+  if(cleared){
+    const pts=[0,100,300,500,800];
+    score+=pts[cleared]*level; lines+=cleared;
+    level=Math.floor(lines/10)+1; update_ui();
+  }
+}
+
+function drop(){if(fits(current.shape,current.x,current.y+1)){current.y++;}else{place();}}
+function rotate(){const s=current.shape[0].map((_,i)=>current.shape.map(r=>r[i]).reverse());if(fits(s,current.x,current.y))current.shape=s;}
+
+function endGame(){dead=true;running=false;cancelAnimationFrame(animId);document.getElementById('msg').textContent='¡Fin del juego! Presiona Iniciar para otra partida.';document.getElementById('startBtn').textContent='Nueva partida';draw();}
+
+function drawCell(c,x,y,size,context){
+  context.fillStyle=c; context.beginPath();
+  context.roundRect(x+1,y+1,size-2,size-2,3); context.fill();
+  context.fillStyle='rgba(255,255,255,0.15)';
+  context.fillRect(x+2,y+2,size-4,4);
+}
+
+function draw(){
+  ctx.fillStyle='#120820';ctx.fillRect(0,0,canvas.width,canvas.height);
+  ctx.strokeStyle='rgba(255,68,170,0.06)';ctx.lineWidth=0.5;
+  for(let r=0;r<=ROWS;r++){ctx.beginPath();ctx.moveTo(0,r*CELL);ctx.lineTo(COLS*CELL,r*CELL);ctx.stroke();}
+  for(let c=0;c<=COLS;c++){ctx.beginPath();ctx.moveTo(c*CELL,0);ctx.lineTo(c*CELL,ROWS*CELL);ctx.stroke();}
+  board.forEach((row,r)=>row.forEach((v,c)=>{if(v)drawCell(v,c*CELL,r*CELL,CELL,ctx);}));
+  if(current)current.shape.forEach((row,r)=>row.forEach((v,c)=>{if(v)drawCell(current.color,(current.x+c)*CELL,(current.y+r)*CELL,CELL,ctx);}));
+  if(dead){ctx.fillStyle='rgba(0,0,0,0.7)';ctx.fillRect(0,0,canvas.width,canvas.height);ctx.fillStyle='#ff44aa';ctx.font='bold 22px Courier New';ctx.textAlign='center';ctx.fillText('GAME OVER',canvas.width/2,canvas.height/2-14);ctx.fillStyle='#fff';ctx.font='14px Courier New';ctx.fillText('Puntos: '+score,canvas.width/2,canvas.height/2+14);}
+}
+
+function drawNext(){
+  nCtx.fillStyle='#120820';nCtx.fillRect(0,0,80,80);
+  const s=next.shape,offX=Math.floor((4-s[0].length)/2)*CELL/1.5,offY=Math.floor((4-s.length)/2)*CELL/1.5;
+  const cs=CELL*0.9;
+  s.forEach((row,r)=>row.forEach((v,c)=>{if(v){nCtx.fillStyle=next.color;nCtx.beginPath();nCtx.roundRect(offX+c*cs+1,offY+r*cs+1,cs-2,cs-2,3);nCtx.fill();}}));
+}
+
+document.addEventListener('keydown',e=>{
+  if(!running)return;
+  if(e.key==='ArrowLeft'&&fits(current.shape,current.x-1,current.y))current.x--;
+  else if(e.key==='ArrowRight'&&fits(current.shape,current.x+1,current.y))current.x++;
+  else if(e.key==='ArrowDown'){drop();lastDrop=performance.now();}
+  else if(e.key==='ArrowUp')rotate();
+  else if(e.key===' '){while(fits(current.shape,current.x,current.y+1))current.y++;place();}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+  draw();
+});
 
 init();
 </script>
 </body>
 </html>
-

@@ -1,1 +1,148 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Snake</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body {
+      background:#0a1a0f; display:flex; flex-direction:column;
+      align-items:center; justify-content:center; min-height:100vh;
+      font-family:'Courier New',monospace; color:#fff; gap:16px;
+    }
+    .top { display:flex; align-items:center; justify-content:space-between; width:420px; }
+    .back { font-size:12px; color:#555; text-decoration:none; letter-spacing:1px; }
+    .back:hover { color:#aaa; }
+    h1 { font-size:22px; letter-spacing:6px; text-transform:uppercase; color:#44dd88; }
+    .info { display:flex; gap:40px; font-size:14px; color:#aaa; letter-spacing:2px; }
+    .info span b { color:#44dd88; font-size:24px; }
+    canvas { border:2px solid #1a4a2a; border-radius:8px; display:block; }
+    .controls { display:flex; gap:12px; }
+    button {
+      padding:8px 24px; font-size:14px; font-family:'Courier New',monospace;
+      letter-spacing:2px; text-transform:uppercase; background:transparent;
+      color:#fff; border:1px solid #2a5a3a; border-radius:6px; cursor:pointer; transition:all 0.2s;
+    }
+    button:hover { background:#0f2a18; border-color:#44dd88; color:#44dd88; }
+    #msg { font-size:13px; color:#556; letter-spacing:1px; height:18px; }
+    .legend { font-size:12px; color:#446; letter-spacing:1px; }
+  </style>
+</head>
+<body>
+<div class="top">
+  <a class="back" href="../index.html">← ARCADE</a>
+  <h1>Snake</h1>
+  <span></span>
+</div>
+<div class="info">
+  <span>PUNTOS<br><b id="scoreDisplay">0</b></span>
+  <span>MEJOR<br><b id="bestDisplay">0</b></span>
+</div>
+<canvas id="snake" width="420" height="420"></canvas>
+<div class="controls">
+  <button id="startBtn" onclick="toggleGame()">Iniciar</button>
+  <button onclick="resetGame()">Reiniciar</button>
+</div>
+<p id="msg">Presiona Iniciar · Flechas o WASD para mover</p>
+<div class="legend">↑ ↓ ← → &nbsp;·&nbsp; W A S D</div>
+
+<script>
+const canvas=document.getElementById('snake'),ctx=canvas.getContext('2d');
+const SIZE=420,CELL=20,COLS=SIZE/CELL;
+let snake,dir,nextDir,apple,score,best=0,running=false,animId=null,dead=false;
+
+function init(){
+  snake=[{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir={x:1,y:0}; nextDir={x:1,y:0};
+  score=0; dead=false;
+  placeApple();
+  document.getElementById('scoreDisplay').textContent=0;
+  draw();
+}
+
+function placeApple(){
+  do { apple={x:Math.floor(Math.random()*COLS),y:Math.floor(Math.random()*COLS)}; }
+  while(snake.some(s=>s.x===apple.x&&s.y===apple.y));
+}
+
+function resetGame(){
+  running=false; clearTimeout(animId);
+  document.getElementById('startBtn').textContent='Iniciar';
+  document.getElementById('msg').textContent='Presiona Iniciar · Flechas o WASD para mover';
+  init();
+}
+
+function toggleGame(){
+  if(dead){resetGame();return;}
+  running=!running;
+  document.getElementById('startBtn').textContent=running?'Pausar':'Continuar';
+  document.getElementById('msg').textContent=running?'':'Pausado';
+  if(running)loop();
+}
+
+function loop(){
+  if(!running)return;
+  update();
+  draw();
+  animId=setTimeout(loop,120);
+}
+
+function update(){
+  dir=nextDir;
+  const head={x:snake[0].x+dir.x,y:snake[0].y+dir.y};
+  if(head.x<0||head.x>=COLS||head.y<0||head.y>=COLS||snake.some(s=>s.x===head.x&&s.y===head.y)){
+    endGame(); return;
+  }
+  snake.unshift(head);
+  if(head.x===apple.x&&head.y===apple.y){
+    score++; if(score>best)best=score;
+    document.getElementById('scoreDisplay').textContent=score;
+    document.getElementById('bestDisplay').textContent=best;
+    placeApple();
+  } else { snake.pop(); }
+}
+
+function endGame(){
+  dead=true; running=false; clearTimeout(animId);
+  document.getElementById('msg').textContent='¡Perdiste! Presiona Iniciar para otra partida.';
+  document.getElementById('startBtn').textContent='Nueva partida';
+  draw();
+}
+
+function draw(){
+  ctx.fillStyle='#0a1a0f'; ctx.fillRect(0,0,SIZE,SIZE);
+  // Grid
+  ctx.strokeStyle='rgba(68,221,136,0.05)'; ctx.lineWidth=0.5;
+  for(let i=0;i<=COLS;i++){ctx.beginPath();ctx.moveTo(i*CELL,0);ctx.lineTo(i*CELL,SIZE);ctx.stroke();ctx.beginPath();ctx.moveTo(0,i*CELL);ctx.lineTo(SIZE,i*CELL);ctx.stroke();}
+  // Apple
+  ctx.fillStyle='#ff4455';
+  ctx.beginPath();ctx.arc(apple.x*CELL+CELL/2,apple.y*CELL+CELL/2,CELL/2-2,0,Math.PI*2);ctx.fill();
+  // Snake
+  snake.forEach((s,i)=>{
+    const t=1-i/snake.length;
+    ctx.fillStyle=`rgba(${Math.round(68+t*80)},${Math.round(180+t*60)},${Math.round(100+t*36)},1)`;
+    ctx.beginPath();ctx.roundRect(s.x*CELL+1,s.y*CELL+1,CELL-2,CELL-2,i===0?6:3);ctx.fill();
+  });
+  // Death overlay
+  if(dead){
+    ctx.fillStyle='rgba(0,0,0,0.65)';ctx.fillRect(0,0,SIZE,SIZE);
+    ctx.fillStyle='#ff4455';ctx.font='bold 28px Courier New';ctx.textAlign='center';
+    ctx.fillText('¡GAME OVER!',SIZE/2,SIZE/2-14);
+    ctx.fillStyle='#44dd88';ctx.font='16px Courier New';
+    ctx.fillText('Puntos: '+score,SIZE/2,SIZE/2+16);
+  }
+}
+
+document.addEventListener('keydown',e=>{
+  const map={ArrowUp:{x:0,y:-1},ArrowDown:{x:0,y:1},ArrowLeft:{x:-1,y:0},ArrowRight:{x:1,y:0},w:{x:0,y:-1},s:{x:0,y:1},a:{x:-1,y:0},d:{x:1,y:0},W:{x:0,y:-1},S:{x:0,y:1},A:{x:-1,y:0},D:{x:1,y:0}};
+  const nd=map[e.key];
+  if(nd&&!(nd.x===-dir.x&&nd.y===-dir.y)){nextDir=nd;}
+  if(['ArrowUp','ArrowDown','ArrowLeft','ArrowRight',' '].includes(e.key))e.preventDefault();
+});
+
+init();
+</script>
+</body>
+</html>
 
